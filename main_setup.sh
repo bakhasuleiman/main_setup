@@ -11,7 +11,6 @@ function install_stack() {
   setup_prometheus
   setup_grafana
   setup_zabbix
-  setup_urbackup
   configure_docker_compose
   enable_autostart
 }
@@ -54,16 +53,14 @@ function create_users_and_directories() {
   sudo useradd --system --no-create-home --shell /usr/sbin/nologin prometheus
   sudo useradd --system --no-create-home --shell /usr/sbin/nologin grafana
   sudo useradd --system --no-create-home --shell /usr/sbin/nologin zabbix
-  sudo useradd --system --no-create-home --shell /usr/sbin/nologin urbackup
 
   # Создаем директории для данных
-  sudo mkdir -p /opt/data/{prometheus,grafana,zabbix,urbackup}
+  sudo mkdir -p /opt/data/{prometheus,grafana,zabbix}
 
   # Устанавливаем владельцев и права
   sudo chown -R prometheus:prometheus /opt/data/prometheus
   sudo chown -R grafana:grafana /opt/data/grafana
   sudo chown -R zabbix:zabbix /opt/data/zabbix
-  sudo chown -R urbackup:urbackup /opt/data/urbackup
   sudo chmod -R 750 /opt/data/*
 
   echo "Users and directories created successfully!"
@@ -71,10 +68,28 @@ function create_users_and_directories() {
 
 function setup_prometheus() {
   echo "Setting up Prometheus..."
-  sudo mkdir -p /opt/monitoring-stack/prometheus
-  sudo nano /opt/monitoring-stack/prometheus/prometheus.yml
-  # Добавить конфигурацию Prometheus в prometheus.yml (вместо nano можно использовать echo для автоматизации)
+  
+  # Создаем конфигурационный файл prometheus.yml
+  cat <<EOF | sudo tee /opt/monitoring-stack/prometheus/prometheus.yml
+global:
+  scrape_interval: 15s  # Интервал между запросами к целям (15 секунд)
+  evaluation_interval: 15s  # Интервал для оценки правил оповещений
 
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']  # Цель для самого Prometheus (self-scrape)
+
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['host.docker.internal:9323']  # Экспортёр метрик Docker (если используется)
+
+  - job_name: 'zabbix'
+    static_configs:
+      - targets: ['zabbix-server:10051']  # Пример для Zabbix (если нужно собирать метрики с Zabbix)
+EOF
+  
+  # Запускаем контейнер Prometheus
   sudo docker-compose up -d prometheus
   echo "Prometheus setup completed!"
 }
@@ -91,16 +106,10 @@ function setup_zabbix() {
   echo "Zabbix setup completed!"
 }
 
-function setup_urbackup() {
-  echo "Setting up UrBackup..."
-  sudo docker-compose up -d urbackup
-  echo "UrBackup setup completed!"
-}
-
 function configure_docker_compose() {
   echo "Configuring Docker Compose..."
 
-  cat <<EOF > /opt/monitoring-stack/docker-compose.yml
+  cat <<EOF | sudo tee /opt/monitoring-stack/docker-compose.yml
 version: '3.8'
 services:
   prometheus:
@@ -163,17 +172,8 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
-
-  urbackup:
-    image: uroni/urbackup-server
-    container_name: urbackup
-    ports:
-      - "55413:55413"
-      - "55414:55414"
-    volumes:
-      - /opt/data/urbackup:/backups
-    restart: unless-stopped
 EOF
+
   echo "Docker Compose file configured!"
 }
 
