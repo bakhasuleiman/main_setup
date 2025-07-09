@@ -68,9 +68,7 @@ function create_users_and_directories() {
 
 function setup_prometheus() {
   echo "Setting up Prometheus..."
-  
-  # Создаем конфигурационный файл prometheus.yml
-  cat <<EOF | sudo tee /opt/monitoring-stack/prometheus/prometheus.yml
+  cat <<EOF > /opt/monitoring-stack/prometheus/prometheus.yml
 global:
   scrape_interval: 15s  # Интервал между запросами к целям (15 секунд)
   evaluation_interval: 15s  # Интервал для оценки правил оповещений
@@ -82,14 +80,10 @@ scrape_configs:
 
   - job_name: 'docker'
     static_configs:
-      - targets: ['host.docker.internal:9323']  # Экспортёр метрик Docker (если используется)
+      - targets: ['host.docker.internal:9323']  # Экспортёр метрик Docker
 
-  - job_name: 'zabbix'
-    static_configs:
-      - targets: ['zabbix-server:10051']  # Пример для Zabbix (если нужно собирать метрики с Zabbix)
 EOF
-  
-  # Запускаем контейнер Prometheus
+
   sudo docker-compose up -d prometheus
   echo "Prometheus setup completed!"
 }
@@ -109,7 +103,7 @@ function setup_zabbix() {
 function configure_docker_compose() {
   echo "Configuring Docker Compose..."
 
-  cat <<EOF | sudo tee /opt/monitoring-stack/docker-compose.yml
+  cat <<EOF > /opt/monitoring-stack/docker-compose.yml
 version: '3.8'
 services:
   prometheus:
@@ -173,7 +167,6 @@ services:
       - "8080:8080"
     restart: unless-stopped
 EOF
-
   echo "Docker Compose file configured!"
 }
 
